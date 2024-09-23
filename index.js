@@ -89,6 +89,13 @@ async function run() {
             res.send(result);
         })
 
+        // app.get('/userProfile/:email', async(req, res) =>{
+        //     const email = req.params.email;
+        //     const query = {email: email};
+        //     const result = await usersCollection.findOne(query);
+        //     res.send(result);
+        // })
+
         //admin
         app.patch('/users/admin/:id', verifyToken, verifyAdmin, async(req, res) =>{
             const id = req.params.id;
@@ -221,6 +228,20 @@ async function run() {
                 res.status(500).json({ error: 'Internal Server Error' });
             }
         });
+
+        // admin-start
+        app.get('/admin-start', verifyToken, verifyAdmin, async(req, res) =>{
+            const user = await usersCollection.estimatedDocumentCount();
+            const doctors = await doctorsCollection.estimatedDocumentCount();
+            const appointments = await appointmentCollection.estimatedDocumentCount();
+
+            res.send({
+                user,
+                doctors,
+                appointments,
+            })
+
+        })
         
 
         await client.db("admin").command({ ping: 1 });
