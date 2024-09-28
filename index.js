@@ -5,7 +5,7 @@ const app = express();
 require('dotenv').config();
 const port = process.env.PORT || 9500;
 const cors = require('cors');
-const stripe = require('stripe')('sk_test_51PtvtRILVhqQhMxhK2zAtD7WM8qUcZNnO3i09r89J1LNjGfpmWiAwBaWWJUKBgHMNW0955r2WMTyIAdwEJ5lxHx800FKxxS7KA');
+const stripe = require('stripe')(process.env.DB_STRIPE_SECRET_KEY);
 
 app.use(cors());
 app.use(express.json());
@@ -194,40 +194,49 @@ async function run() {
             res.send(result);
         })
 
-        //payment api
-        app.post('/payment', async (req, res) => {
-            const {serviceName, price,  isEmail} = req.body;
-            console.log({price, isEmail});
-            try {
-                const product = await stripe.products.create({
-                    name: serviceName,
-                });
-        
-                const servicePrice = await stripe.prices.create({
-                    product: product.id,
-                    unit_amount: price * 100, // 100 INR
-                    currency: 'usd',
-                });
-        
-                const session = await stripe.checkout.sessions.create({
-                    line_items: [
-                        {
-                            price: servicePrice.id,
-                            quantity: 1,
-                        }
-                    ],
-                    mode: 'payment',
-                    success_url: 'http://localhost:9500/',
-                    cancel_url: 'http://localhost:9500/dashboard',
-                    customer_email: isEmail,
-                });
-        
-                res.json({ url: session.url });
-            } catch (error) {
-                console.error('Error creating payment session:', error);
-                res.status(500).json({ error: 'Internal Server Error' });
-            }
+        // payment intent
+        app.post('/create-payment-intent', async (req, res) => {
+            const { price } = req.body;
+            const amount = parseInt(price * 100);
+            console.log(amount, 'amount inside the intent')
+
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            });
+
+            res.send({
+                clientSecret: paymentIntent.client_secret
+            })
         });
+
+        app.post('/payments', async(req, res) =>{
+            const payment = req.body;
+            const paymentResult = await paymentCollection.insertOne(payment);
+    
+            //carefully each item delete from the cart;
+            // console.log('payment info', paymentResult);
+            // const query = {
+            //     _id: {
+            //         $in: payment.servicesId(id => new ObjectId(id))
+            // }}
+    
+            // const deleteResult = await appointmentCollection.deleteOne(query)
+    
+            res.send({
+                paymentResult, 
+                // deleteResult
+            })
+        })
+
+        app.get('/payments', verifyToken, async(req, res) =>{
+            const email = req.query.email;
+            const query = {email: email};
+            const result = await paymentCollection.find(query).toArray();
+            res.send(result);
+        })
+
 
         // admin-start
         app.get('/admin-start', verifyToken, verifyAdmin, async(req, res) =>{
